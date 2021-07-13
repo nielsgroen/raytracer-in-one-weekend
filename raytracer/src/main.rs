@@ -1,6 +1,7 @@
 extern crate glium;
 
 use glium::{implement_vertex, uniform};
+use glutin::dpi::{Size, PhysicalSize};
 
 #[macro_use]
 mod primitives;
@@ -33,8 +34,6 @@ const VERTEX_SHADER_SRC: &str = r#"
 const FRAGMENT_SHADER_SRC: &str = r#"
     #version 330
 
-    const int MAX_SPHERES = 1;
-
     struct LightSource
     {
         vec3 position;
@@ -50,8 +49,19 @@ const FRAGMENT_SHADER_SRC: &str = r#"
     struct Ray
     {
         vec3 start;
-        vec3 end;
+        vec3 direction;
     };
+
+    struct Camera
+    {
+        vec3 position;
+        vec3 direction;
+    };
+
+
+    const int MAX_SPHERES = 1;
+    const vec3 ORIGIN = vec3(0.0, 0.0, 0.0);
+
 
     in vec4 gl_FragCoord;
     in vec2 space_color;
@@ -59,23 +69,70 @@ const FRAGMENT_SHADER_SRC: &str = r#"
 
     uniform int width;
     uniform int height;
+    uniform float focalLength;
     uniform Sphere spheres[1];
+    uniform Camera camera;
+
+    vec3 ray_color(Ray ray);
+    float ray_sphere_collision(Ray ray, Sphere sphere);
 
     void main() {
-        vec3 pixCoord = vec3(gl_FragCoord.x / width * 2 - 1, gl_FragCoord.y / height * 2 - 1, 0);
 
-        vec3 pixColor = vec3(0,0,0);
+        // TODO: pixCoord and pixVector don't take into account the camera parameters
+        vec3 pixCoord = vec3(gl_FragCoord.x / width * 2 - 1, gl_FragCoord.y / width * 2 - float(height) / width, 0);
+        vec3 pixVector = vec3(gl_FragCoord.x / width * 2 - 1, gl_FragCoord.y / width * 2 - float(height) / width, -focalLength);
+
+        Ray r = Ray(camera.position, pixVector);
+        vec3 pixColor = ray_color(r);
+        // vec3 pixColor = vec3(0,0,0);
+        // vec3 pixColor = pixCoord;
+
+        // for (int i = 0; i < MAX_SPHERES; i++) {
+        //     float pixDistance = distance(pixCoord, spheres[i].position);
+        //     if (pixDistance < spheres[i].radius) {
+        //         float greyval = 1 - pixDistance / spheres[i].radius;
+        //         pixColor = vec3(greyval, greyval, greyval);
+        //     }
+        // }
+
 
         for (int i = 0; i < MAX_SPHERES; i++) {
-            float pixDistance = distance(pixCoord, spheres[i].position);
-            if (pixDistance < spheres[i].radius) {
-                float greyval = 1 - pixDistance / spheres[i].radius;
-                pixColor = vec3(greyval, greyval, greyval);
+            float t = ray_sphere_collision(r, spheres[i]);
+            if (t > 0.0) {
+                // pixColor = vec3(1.0, 0.0, 0.0);
+                vec3 n = normalize(r.start + t * r.direction - spheres[i].position);
+                pixColor = 0.5 * (n + vec3(1.0, 1.0, 1.0));
             }
         }
 
+        // color = vec4(pixColor, 1.0);
         color = vec4(pixColor, 1.0);
+        // color = vec4(0.0, 0.0, 1.0, 1.0);
     }
+
+    vec3 ray_color(Ray ray)
+    {
+        vec3 unit_direction = normalize(ray.direction);
+        float t = 0.5 * (unit_direction.y + 1.0);
+        return (1.0 - t) * vec3(1.0, 1.0, 1.0) + t * vec3(0.5, 0.7, 1.0);
+    };
+
+    float ray_sphere_collision(Ray ray, Sphere sphere)
+    {
+        vec3 sc = ray.start - sphere.position;
+
+        // calculating the discriminant
+        float a = dot(ray.direction, ray.direction);
+        float b = 2.0 * dot(sc, ray.direction);
+        float c = dot(sc, sc) - sphere.radius * sphere.radius;
+        float discriminant = b * b - 4.0 * a * c;
+        if (discriminant < 0)
+        {
+            return -1.0;
+        }
+        return (-b - sqrt(discriminant)) / (2.0 * a);
+    };
+
 "#;
 
 
@@ -84,7 +141,12 @@ fn main() {
     use glium::{glutin, Surface};
 
     let event_loop = glutin::event_loop::EventLoop::new();
-    let wb = glutin::window::WindowBuilder::new();
+    let wb = glutin::window::WindowBuilder::new()
+        .with_title("Raytracer".to_owned())
+        .with_inner_size(Size::Physical(PhysicalSize {
+            width: constants::START_WIDTH as u32,
+            height: constants::START_HEIGHT as u32,
+        }));
     let cb = glutin::ContextBuilder::new();
     let display = glium::Display::new(wb, cb, &event_loop).unwrap();
 
@@ -134,8 +196,8 @@ fn main() {
             &program,
             &calculate_uniforms(&[
                 primitives::Sphere {
-                    position: [0.0, 0.0, 0.0f32],
-                    radius: 0.4f32,
+                    position: [0.0, 0.0, -1.0f32],
+                    radius: 0.3f32,
                 }
             ]),
             // &calc_uniforms!(

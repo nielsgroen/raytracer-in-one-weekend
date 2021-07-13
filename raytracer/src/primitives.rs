@@ -2,13 +2,18 @@ extern crate glium;
 
 use glium::uniforms::{UniformValue, UniformsStorage, EmptyUniforms, AsUniformValue, Uniforms};
 
+use crate::constants;
 use crate::constants::MAX_SPHERES;
 
 
 // pub fn calculate_uniforms<'a>() -> UniformsStorage<'static, i32, UniformsStorage<'static, [[f32; 4]; 4], UniformsStorage<'static, i32, UniformsStorage<'static, i32, EmptyUniforms>>>> {
 pub fn calculate_uniforms(spheres: &[Sphere]) -> impl glium::uniforms::Uniforms {
-    let uniforms = UniformsStorage::new("height", 500);
-    let uniforms = uniforms.add("width", 600);
+
+    // VIEWPORT
+    let uniforms = UniformsStorage::new("height", constants::START_HEIGHT);
+    let uniforms = uniforms.add("width", constants::START_WIDTH);
+    let uniforms = uniforms.add("focalLength", 1.0f32);
+
     let uniforms = uniforms.add("matrix", [
         [1.0, 0.0, 0.0, 0.0],
         [0.0, 1.0, 0.0, 0.0],
@@ -33,8 +38,15 @@ pub fn calculate_uniforms(spheres: &[Sphere]) -> impl glium::uniforms::Uniforms 
     //     }
     // };
 
+    // SPHERES
     let uniforms = uniforms.add("spheres[0].position", spheres[0].position);
     let uniforms = uniforms.add("spheres[0].radius", spheres[0].radius);
+
+    // CAMERA
+    let uniforms = uniforms.add("camera.position", [0.0, 0.0, 0.0f32]);
+    let uniforms = uniforms.add("camera.direction", [0.0, 0.0, -1.0f32]);
+
+
 
     uniforms
 }
@@ -67,12 +79,6 @@ pub struct Sphere {
     pub position: [f32; 3],
     pub radius: f32,
 }
-
-// impl Sphere {
-//     fn add_uniform(uniforms_storage: UniformsStorage<T: AsUniformValue, R: Uniforms>) -> impl glium::uniforms::Uniforms {
-//         uniforms_storage
-//     }
-// }
 
 impl glium::uniforms::Uniforms for Sphere {
     fn visit_values<'a, F: FnMut(&str, UniformValue<'a>)>(&'a self, mut f: F) {
